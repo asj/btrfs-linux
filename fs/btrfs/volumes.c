@@ -1264,6 +1264,7 @@ static int open_fs_devices(struct btrfs_fs_devices *fs_devices,
 	fs_devices->opened = 1;
 	fs_devices->latest_dev = latest_dev;
 	fs_devices->total_rw_bytes = 0;
+	fs_devices->device_alloc_method = BTRFS_DEV_ALLOC_BY_SPACE;
 	fs_devices->chunk_alloc_policy = BTRFS_CHUNK_ALLOC_REGULAR;
 #ifdef CONFIG_BTRFS_EXPERIMENTAL
 	fs_devices->rr_min_contig_read = BTRFS_DEFAULT_RR_MIN_CONTIG_READ;
@@ -5277,10 +5278,16 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 	ctl->ndevs = ndevs;
 
 	/*
-	 * now sort the devices by hole size / available space
+	 * Now sort the devices by hole size / available space.
 	 */
-	sort(devices_info, ndevs, sizeof(struct btrfs_device_info),
-	     btrfs_cmp_device_info, NULL);
+	switch (fs_devices->device_alloc_method) {
+	default:
+		fallthrough;
+	case BTRFS_DEV_ALLOC_BY_SPACE:
+		sort(devices_info, ndevs, sizeof(struct btrfs_device_info),
+		     btrfs_cmp_device_info, NULL);
+		break;
+	}
 
 	return 0;
 }
