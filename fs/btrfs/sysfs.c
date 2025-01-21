@@ -1328,7 +1328,8 @@ static const char *btrfs_read_policy_name[] = {
 #ifdef CONFIG_BTRFS_EXPERIMENTAL
 
 /* Global module configuration parameters. */
-static char *read_policy;
+/* NULL read_policy will set the raid1 balancing to the default */
+static char *read_policy = NULL;
 char *btrfs_get_mod_read_policy(void)
 {
 	return read_policy;
@@ -1340,15 +1341,9 @@ MODULE_PARM_DESC(read_policy,
 "Global read policy: pid (default), round-robin[:<min_contig_read>], devid[:<devid>]");
 #endif
 
-int btrfs_read_policy_to_enum(const char *str, s64 *value_ret)
+static int btrfs_split_sysfs_arg(char *param, s64 *value_ret)
 {
-	char param[32];
 	char __maybe_unused *value_str;
-
-	if (!str || strlen(str) == 0)
-		return 0;
-
-	strscpy(param, str);
 
 #ifdef CONFIG_BTRFS_EXPERIMENTAL
 	/* Separate value from input in policy:value format. */
@@ -1369,6 +1364,23 @@ int btrfs_read_policy_to_enum(const char *str, s64 *value_ret)
 	}
 #endif
 
+	return 0;
+}
+
+int btrfs_read_policy_to_enum(const char *str, s64 *value_ret)
+{
+	int ret;
+	char param[32] = { 0 };
+
+	/* If the policy is empty, point to the default at index 0. */
+	if (!str || strlen(str) == 0)
+		return 0;
+
+	strncpy(param, str, sizeof(param) - 1);
+	ret = btrfs_split_sysfs_arg(param, value_ret);
+	if (ret < 0)
+		return ret;
+
 	return sysfs_match_string(btrfs_read_policy_name, param);
 }
 
@@ -1377,8 +1389,10 @@ int __init btrfs_read_policy_init(void)
 {
 	s64 value;
 
-	if (btrfs_read_policy_to_enum(read_policy, &value) == -EINVAL) {
-		btrfs_err(NULL, "invalid read policy or value %s", read_policy);
+	/* Verify whether the read_policy from modprobe is correct. */
+	if (btrfs_read_policy_to_enum(read_policy, &value) < 0) {
+		btrfs_err(NULL, "invalid read policy or value %s",
+			  read_policy);
 		return -EINVAL;
 	}
 
