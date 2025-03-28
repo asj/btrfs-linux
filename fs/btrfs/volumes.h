@@ -792,7 +792,8 @@ struct btrfs_device *btrfs_find_device(const struct btrfs_fs_devices *fs_devices
 				       const struct btrfs_dev_lookup_args *args);
 int btrfs_shrink_device(struct btrfs_device *device, u64 new_size);
 int parse_device_role(char *str, enum btrfs_device_roles *role);
-int btrfs_init_new_device(struct btrfs_fs_info *fs_info, const char *path);
+int btrfs_init_new_device(struct btrfs_fs_info *fs_info, const char *path,
+			  enum btrfs_device_roles role);
 int btrfs_balance(struct btrfs_fs_info *fs_info,
 		  struct btrfs_balance_control *bctl,
 		  struct btrfs_ioctl_balance_args *bargs);

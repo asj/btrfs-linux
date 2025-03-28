@@ -2587,6 +2587,8 @@ static long btrfs_ioctl_add_dev(struct btrfs_fs_info *fs_info, void __user *arg)
 	struct btrfs_ioctl_vol_args *vol_args;
 	bool restore_op = false;
 	int ret;
+	char *colon;
+	enum btrfs_device_roles role = BTRFS_DEVICE_ROLE_NONE;
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
@@ -2626,8 +2628,16 @@ static long btrfs_ioctl_add_dev(struct btrfs_fs_info *fs_info, void __user *arg)
 	if (ret < 0)
 		goto out_free;
 
-	ret = btrfs_init_new_device(fs_info, vol_args->name);
+	colon = strstr(vol_args->name, ":");
+	if (colon) {
+		vol_args->name[colon - vol_args->name] = '\0';
+		colon++;
+		ret = parse_device_role(colon, &role);
+		if (ret)
+			goto out_free;
+	}
 
+	ret = btrfs_init_new_device(fs_info, vol_args->name, role);
 	if (!ret)
 		btrfs_info(fs_info, "disk added %s", vol_args->name);
 

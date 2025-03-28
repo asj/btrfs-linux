@@ -2699,7 +2699,9 @@ int parse_device_role(char *str, enum btrfs_device_roles *role)
 	return 0;
 }
 
-int btrfs_init_new_device(struct btrfs_fs_info *fs_info, const char *device_path)
+int btrfs_init_new_device(struct btrfs_fs_info *fs_info,
+			  const char *device_path,
+			  enum btrfs_device_roles role)
 {
 	struct btrfs_root *root = fs_info->dev_root;
 	struct btrfs_trans_handle *trans;
@@ -2780,6 +2782,7 @@ int btrfs_init_new_device(struct btrfs_fs_info *fs_info, const char *device_path
 	device->io_width = fs_info->sectorsize;
 	device->io_align = fs_info->sectorsize;
 	device->sector_size = fs_info->sectorsize;
+	device->type = BTRFS_DEVICE_ROLE_MASK & role;
 	device->total_bytes =
 		round_down(bdev_nr_bytes(device->bdev), fs_info->sectorsize);
 	device->disk_total_bytes = device->total_bytes;
@@ -2836,6 +2839,18 @@ int btrfs_init_new_device(struct btrfs_fs_info *fs_info, const char *device_path
 	 * infos
 	 */
 	btrfs_clear_space_info_full(fs_info);
+
+	/*
+	 * Assigning a role to a device via btrfs device add automatically
+	 * activates the role-then-space allocation method if it wasn't already
+	 * active. Avoid assigning device roles if you do not intend to use the
+	 * role-then-space strategy.
+	 */
+	if (((device->type & BTRFS_DEVICE_ROLE_MASK) != BTRFS_DEVICE_ROLE_NONE ||
+	    (device->type & BTRFS_DEVICE_ROLE_MASK) != 0) &&
+	    fs_devices->device_alloc_method == BTRFS_DEV_ALLOC_BY_SPACE)
+		fs_devices->device_alloc_method =
+				BTRFS_DEV_ALLOC_BY_ROLE_THEN_SPACE;
 
 	mutex_unlock(&fs_info->chunk_mutex);
 
