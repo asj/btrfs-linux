@@ -81,6 +81,25 @@ enum btrfs_raid_types {
 	BTRFS_NR_RAID_TYPES
 };
 
+#define BTRFS_DEVICE_ROLE_MASK	0xff
+/*
+ * device_role value and how it will be used.
+ * 	      0: Unused
+ *	   1-20: Metadata only
+ *	  21-40: Metadata preferred
+ *	  41-80: Anything|None
+ *	 81-100: Data preferred
+ *	101-128: Data only
+ * Declare some predefined easy to use device_bg_type values
+ */
+enum btrfs_device_roles {
+	BTRFS_DEVICE_ROLE_METADATA_ONLY = 20,
+	BTRFS_DEVICE_ROLE_METADATA      = 40,
+	BTRFS_DEVICE_ROLE_NONE          = 80,
+	BTRFS_DEVICE_ROLE_DATA          = 100,
+	BTRFS_DEVICE_ROLE_DATA_ONLY     = 120,
+};
+
 /*
  * Use sequence counter to get consistent device stat data on
  * 32-bit processors.
@@ -770,6 +789,7 @@ int btrfs_grow_device(struct btrfs_trans_handle *trans,
 struct btrfs_device *btrfs_find_device(const struct btrfs_fs_devices *fs_devices,
 				       const struct btrfs_dev_lookup_args *args);
 int btrfs_shrink_device(struct btrfs_device *device, u64 new_size);
+int parse_device_role(char *str, enum btrfs_device_roles *role);
 int btrfs_init_new_device(struct btrfs_fs_info *fs_info, const char *path);
 int btrfs_balance(struct btrfs_fs_info *fs_info,
 		  struct btrfs_balance_control *bctl,

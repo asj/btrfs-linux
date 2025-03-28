@@ -2678,6 +2678,27 @@ next_slot:
 	return 0;
 }
 
+int parse_device_role(char *str, enum btrfs_device_roles *role)
+{
+	if (strncmp(str, "m", strlen(str)) == 0 ||
+	    strncmp(str, "metadata", strlen(str)) == 0) {
+		*role = BTRFS_DEVICE_ROLE_METADATA;
+	} else if (strncmp(str, "d", strlen(str)) == 0 ||
+	    strncmp(str, "data", strlen(str)) == 0) {
+		*role = BTRFS_DEVICE_ROLE_DATA;
+	} else if (strncmp(str, "monly", strlen(str)) == 0 ||
+	    strncmp(str, "metadata-only", strlen(str)) == 0) {
+		*role = BTRFS_DEVICE_ROLE_METADATA_ONLY;
+	} else if (strncmp(str, "donly", strlen(str)) == 0 ||
+	    strncmp(str, "data-only", strlen(str)) == 0) {
+		*role = BTRFS_DEVICE_ROLE_DATA_ONLY;
+	} else {
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 int btrfs_init_new_device(struct btrfs_fs_info *fs_info, const char *device_path)
 {
 	struct btrfs_root *root = fs_info->dev_root;
