@@ -1536,6 +1536,7 @@ BTRFS_ATTR_RW(, read_policy, btrfs_read_policy_show, btrfs_read_policy_store);
  */
 static const char *btrfs_dev_alloc_name[] = {
 	"space",
+	"role-then-space"
 };
 
 static int btrfs_dev_alloc_name_to_enum(const char *str, s64 *value_ret)

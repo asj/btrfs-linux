@@ -317,6 +317,7 @@ BTRFS_DEVICE_GETSET_FUNCS(bytes_used);
 /* Btrfs on disk chunk allocation methods. */
 enum btrfs_device_allocation_method {
 	BTRFS_DEV_ALLOC_BY_SPACE,
+	BTRFS_DEV_ALLOC_BY_ROLE_THEN_SPACE,
 	BTRFS_DEV_ALLOC_NR,
 };
 
@@ -628,6 +629,7 @@ struct btrfs_device_info {
 	u64 dev_offset;
 	u64 max_avail;
 	u64 total_avail;
+	enum btrfs_device_roles role;
 };
 
 struct btrfs_raid_attr {

@@ -5087,19 +5087,59 @@ static int btrfs_cmp_device_space(void *priv, const struct list_head *a,
 {
 	const struct btrfs_device_info *di_a;
 	const struct btrfs_device_info *di_b;
+	enum btrfs_device_roles *role = priv;
 
 	di_a = list_entry(a, struct btrfs_device_info, list);
 	di_b = list_entry(b, struct btrfs_device_info, list);
 
-	if (di_a->max_avail > di_b->max_avail)
-		return -1;
-	if (di_a->max_avail < di_b->max_avail)
-		return 1;
-	if (di_a->total_avail > di_b->total_avail)
-		return -1;
-	if (di_a->total_avail < di_b->total_avail)
-		return 1;
+	if (!role || ((di_a->role == *role) && (di_b->role == *role))) {
+		if (di_a->max_avail > di_b->max_avail)
+			return -1;
+		if (di_a->max_avail < di_b->max_avail)
+			return 1;
+		if (di_a->total_avail > di_b->total_avail)
+			return -1;
+		if (di_a->total_avail < di_b->total_avail)
+			return 1;
+	}
+
 	return 0;
+}
+
+static int btrfs_cmp_role(enum btrfs_device_roles a, enum btrfs_device_roles b,
+			  bool assend)
+{
+	if (a == 0)
+		a = BTRFS_DEVICE_ROLE_NONE;
+
+	if (b == 0)
+		b = BTRFS_DEVICE_ROLE_NONE;
+
+	if (assend)
+		return a > b ? -1 : a < b ? 1 : 0;
+	else
+		return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/* Sort the devices by their role to suit the allocation type. */
+static int btrfs_cmp_device_role(void *priv, const struct list_head *a,
+				 const struct list_head *b)
+{
+	const struct btrfs_device_info *di_a;
+	const struct btrfs_device_info *di_b;
+	u64 *type = (u64 *)priv;
+	enum btrfs_device_roles role_a;
+	enum btrfs_device_roles role_b;
+	bool assend;
+
+	di_a = list_entry(a, struct btrfs_device_info, list);
+	role_a = di_a->role;
+	di_b = list_entry(b, struct btrfs_device_info, list);
+	role_b = di_b->role;
+
+	assend = ((*type & BTRFS_BLOCK_GROUP_TYPE_MASK) == BTRFS_BLOCK_GROUP_DATA);
+
+	return btrfs_cmp_role(role_a, role_b, assend);
 }
 
 static void check_raid56_incompat_flag(struct btrfs_fs_info *info, u64 type)
@@ -5237,6 +5277,14 @@ static void init_alloc_chunk_ctl(struct btrfs_fs_devices *fs_devices,
 	}
 }
 
+static const enum btrfs_device_roles dev_roles[] = {
+	BTRFS_DEVICE_ROLE_METADATA_ONLY,
+	BTRFS_DEVICE_ROLE_METADATA,
+	BTRFS_DEVICE_ROLE_NONE,
+	BTRFS_DEVICE_ROLE_DATA,
+	BTRFS_DEVICE_ROLE_DATA_ONLY,
+};
+
 static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 			      struct alloc_chunk_ctl *ctl,
 			      struct list_head *devices_info)
@@ -5246,6 +5294,7 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 	struct btrfs_device *device;
 	u64 total_avail;
 	u64 dev_extent_want = ctl->max_stripe_size * ctl->dev_stripes;
+	u64 alloc_type = ctl->type & BTRFS_BLOCK_GROUP_TYPE_MASK;
 	int ret;
 	int ndevs = 0;
 	u64 max_avail;
@@ -5256,6 +5305,11 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 	 * about the available holes on each device.
 	 */
 	list_for_each_entry(device, &fs_devices->alloc_list, dev_alloc_list) {
+		unsigned int dev_role = device->type & BTRFS_DEVICE_ROLE_MASK;
+
+		if (!dev_role)
+			dev_role = BTRFS_DEVICE_ROLE_NONE;
+
 		if (!test_bit(BTRFS_DEV_STATE_WRITEABLE, &device->dev_state)) {
 			WARN(1, KERN_ERR
 			       "BTRFS: read-only device in alloc_list\n");
@@ -5266,6 +5320,14 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 					&device->dev_state) ||
 		    test_bit(BTRFS_DEV_STATE_REPLACE_TGT, &device->dev_state))
 			continue;
+
+		if (alloc_type == BTRFS_BLOCK_GROUP_DATA) {
+			if (dev_role == BTRFS_DEVICE_ROLE_METADATA_ONLY)
+				continue;
+		} else {
+			if (dev_role == BTRFS_DEVICE_ROLE_DATA_ONLY)
+				continue;
+		}
 
 		if (device->total_bytes > device->bytes_used)
 			total_avail = device->total_bytes - device->bytes_used;
@@ -5313,6 +5375,7 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 		device_info->max_avail = max_avail;
 		device_info->total_avail = total_avail;
 		device_info->dev = device;
+		device_info->role = dev_role;
 	}
 	ctl->ndevs = ndevs;
 
@@ -5328,6 +5391,17 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 		fallthrough;
 	case BTRFS_DEV_ALLOC_BY_SPACE:
 		list_sort(NULL, devices_info, btrfs_cmp_device_space);
+		break;
+	case BTRFS_DEV_ALLOC_BY_ROLE_THEN_SPACE:
+		/* First, Sort by device roles for the given allocation type */
+		list_sort((void *)&ctl->type, devices_info, btrfs_cmp_device_role);
+
+		/* Next, for each device role, sort the devices by free space */
+		for (int i = 0; i < ARRAY_SIZE(dev_roles); i++) {
+			enum btrfs_device_roles role = dev_roles[i];
+
+			list_sort((void *)&role, devices_info, btrfs_cmp_device_space);
+		}
 		break;
 	}
 
