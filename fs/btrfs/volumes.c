@@ -5061,10 +5061,14 @@ static int btrfs_add_system_chunk(struct btrfs_fs_info *fs_info,
 /*
  * sort the devices in descending order by max_avail, total_avail
  */
-static int btrfs_cmp_device_info(const void *a, const void *b)
+static int btrfs_cmp_device_space(void *priv, const struct list_head *a,
+				  const struct list_head *b)
 {
-	const struct btrfs_device_info *di_a = a;
-	const struct btrfs_device_info *di_b = b;
+	const struct btrfs_device_info *di_a;
+	const struct btrfs_device_info *di_b;
+
+	di_a = list_entry(a, struct btrfs_device_info, list);
+	di_b = list_entry(b, struct btrfs_device_info, list);
 
 	if (di_a->max_avail > di_b->max_avail)
 		return -1;
@@ -5121,6 +5125,8 @@ struct alloc_chunk_ctl {
 	u64 dev_extent_min;
 	u64 stripe_size;
 	u64 chunk_size;
+	/* Smallest free space of all available devices */
+	u64 smallest_avail;
 	int ndevs;
 	/* Space_info the block group is going to belong. */
 	struct btrfs_space_info *space_info;
@@ -5195,6 +5201,7 @@ static void init_alloc_chunk_ctl(struct btrfs_fs_devices *fs_devices,
 	ctl->ncopies = btrfs_raid_array[index].ncopies;
 	ctl->nparity = btrfs_raid_array[index].nparity;
 	ctl->ndevs = 0;
+	ctl->smallest_avail = 0;
 
 	switch (fs_devices->chunk_alloc_policy) {
 	default:
@@ -5211,9 +5218,10 @@ static void init_alloc_chunk_ctl(struct btrfs_fs_devices *fs_devices,
 
 static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 			      struct alloc_chunk_ctl *ctl,
-			      struct btrfs_device_info *devices_info)
+			      struct list_head *devices_info)
 {
 	struct btrfs_fs_info *info = fs_devices->fs_info;
+	struct btrfs_device_info *device_info;
 	struct btrfs_device *device;
 	u64 total_avail;
 	u64 dev_extent_want = ctl->max_stripe_size * ctl->dev_stripes;
@@ -5223,7 +5231,7 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 	u64 dev_offset;
 
 	/*
-	 * in the first pass through the devices list, we gather information
+	 * In the first pass through the devices list, we gather information
 	 * about the available holes on each device.
 	 */
 	list_for_each_entry(device, &fs_devices->alloc_list, dev_alloc_list) {
@@ -5264,16 +5272,26 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 			continue;
 		}
 
+		if (ctl->smallest_avail == 0 || ctl->smallest_avail > max_avail)
+			ctl->smallest_avail = max_avail;
+
 		if (ndevs == fs_devices->rw_devices) {
 			WARN(1, "%s: found more than %llu devices\n",
 			     __func__, fs_devices->rw_devices);
 			break;
 		}
-		devices_info[ndevs].dev_offset = dev_offset;
-		devices_info[ndevs].max_avail = max_avail;
-		devices_info[ndevs].total_avail = total_avail;
-		devices_info[ndevs].dev = device;
+
+		device_info = kzalloc(sizeof(*device_info), GFP_KERNEL);
+		if (!device_info)
+			return -ENOMEM;
+
+		list_add_tail(&device_info->list, devices_info);
 		++ndevs;
+
+		device_info->dev_offset = dev_offset;
+		device_info->max_avail = max_avail;
+		device_info->total_avail = total_avail;
+		device_info->dev = device;
 	}
 	ctl->ndevs = ndevs;
 
@@ -5288,16 +5306,14 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 	default:
 		fallthrough;
 	case BTRFS_DEV_ALLOC_BY_SPACE:
-		sort(devices_info, ndevs, sizeof(struct btrfs_device_info),
-		     btrfs_cmp_device_info, NULL);
+		list_sort(NULL, devices_info, btrfs_cmp_device_space);
 		break;
 	}
 
 	return 0;
 }
 
-static int decide_stripe_size_regular(struct alloc_chunk_ctl *ctl,
-				      struct btrfs_device_info *devices_info)
+static int decide_stripe_size_regular(struct alloc_chunk_ctl *ctl)
 {
 	/* Number of stripes that count for block group size */
 	int data_stripes;
@@ -5309,8 +5325,7 @@ static int decide_stripe_size_regular(struct alloc_chunk_ctl *ctl,
 	 * The DUP profile stores more than one stripe per device, the
 	 * max_avail is the total size so we have to adjust.
 	 */
-	ctl->stripe_size = div_u64(devices_info[ctl->ndevs - 1].max_avail,
-				   ctl->dev_stripes);
+	ctl->stripe_size = div_u64(ctl->smallest_avail, ctl->dev_stripes);
 	ctl->num_stripes = ctl->ndevs * ctl->dev_stripes;
 
 	/* This will have to be fixed for RAID1 and RAID10 over more drives */
@@ -5344,19 +5359,23 @@ static int decide_stripe_size_regular(struct alloc_chunk_ctl *ctl,
 }
 
 static int decide_stripe_size_zoned(struct alloc_chunk_ctl *ctl,
-				    struct btrfs_device_info *devices_info)
+				    struct list_head *devices_info)
 {
-	u64 zone_size = devices_info[0].dev->zone_info->zone_size;
+	struct btrfs_device_info *device_info;
+	u64 zone_size;
 	/* Number of stripes that count for block group size */
 	int data_stripes;
 
+	device_info = list_first_entry(devices_info,
+				       struct btrfs_device_info, list);
+	zone_size = device_info->dev->zone_info->zone_size;
 	/*
 	 * It should hold because:
 	 *    dev_extent_min == dev_extent_want == zone_size * dev_stripes
 	 */
-	ASSERT(devices_info[ctl->ndevs - 1].max_avail == ctl->dev_extent_min,
+	ASSERT(ctl->smallest_avail == ctl->dev_extent_min,
 	       "ndevs=%d max_avail=%llu dev_extent_min=%llu", ctl->ndevs,
-	       devices_info[ctl->ndevs - 1].max_avail, ctl->dev_extent_min);
+	       ctl->smallest_avail, ctl->dev_extent_min);
 
 	ctl->stripe_size = zone_size;
 	ctl->num_stripes = ctl->ndevs * ctl->dev_stripes;
@@ -5381,7 +5400,7 @@ static int decide_stripe_size_zoned(struct alloc_chunk_ctl *ctl,
 
 static int decide_stripe_size(struct btrfs_fs_devices *fs_devices,
 			      struct alloc_chunk_ctl *ctl,
-			      struct btrfs_device_info *devices_info)
+			      struct list_head *devices_info)
 {
 	struct btrfs_fs_info *info = fs_devices->fs_info;
 
@@ -5408,7 +5427,7 @@ static int decide_stripe_size(struct btrfs_fs_devices *fs_devices,
 		btrfs_warn_unknown_chunk_allocation(fs_devices->chunk_alloc_policy);
 		fallthrough;
 	case BTRFS_CHUNK_ALLOC_REGULAR:
-		return decide_stripe_size_regular(ctl, devices_info);
+		return decide_stripe_size_regular(ctl);
 	case BTRFS_CHUNK_ALLOC_ZONED:
 		return decide_stripe_size_zoned(ctl, devices_info);
 	}
@@ -5501,15 +5520,17 @@ struct btrfs_chunk_map *btrfs_alloc_chunk_map(int num_stripes, gfp_t gfp)
 }
 
 static struct btrfs_block_group *create_chunk(struct btrfs_trans_handle *trans,
-			struct alloc_chunk_ctl *ctl,
-			struct btrfs_device_info *devices_info)
+					      struct alloc_chunk_ctl *ctl,
+					      struct list_head *devices_info)
 {
 	struct btrfs_fs_info *info = trans->fs_info;
 	struct btrfs_chunk_map *map;
 	struct btrfs_block_group *block_group;
+	struct btrfs_device_info *device_info;
 	u64 start = ctl->start;
 	u64 type = ctl->type;
 	int ret;
+	int dev_cnt = 0;
 
 	map = btrfs_alloc_chunk_map(ctl->num_stripes, GFP_NOFS);
 	if (!map)
@@ -5524,13 +5545,17 @@ static struct btrfs_block_group *create_chunk(struct btrfs_trans_handle *trans,
 	map->sub_stripes = ctl->sub_stripes;
 	map->num_stripes = ctl->num_stripes;
 
-	for (int i = 0; i < ctl->ndevs; i++) {
+	list_for_each_entry(device_info, devices_info, list) {
+		if (dev_cnt >= ctl->ndevs)
+			break;
 		for (int j = 0; j < ctl->dev_stripes; j++) {
-			int s = i * ctl->dev_stripes + j;
-			map->stripes[s].dev = devices_info[i].dev;
-			map->stripes[s].physical = devices_info[i].dev_offset +
+			int s = dev_cnt * ctl->dev_stripes + j;
+
+			map->stripes[s].dev = device_info->dev;
+			map->stripes[s].physical = device_info->dev_offset +
 						   j * ctl->stripe_size;
 		}
+		dev_cnt++;
 	}
 
 	trace_btrfs_chunk_alloc(info, map, start, ctl->chunk_size);
@@ -5573,7 +5598,7 @@ struct btrfs_block_group *btrfs_create_chunk(struct btrfs_trans_handle *trans,
 {
 	struct btrfs_fs_info *info = trans->fs_info;
 	struct btrfs_fs_devices *fs_devices = info->fs_devices;
-	struct btrfs_device_info *devices_info = NULL;
+	LIST_HEAD(devices_info);
 	struct alloc_chunk_ctl ctl;
 	struct btrfs_block_group *block_group;
 	int ret;
@@ -5602,27 +5627,29 @@ struct btrfs_block_group *btrfs_create_chunk(struct btrfs_trans_handle *trans,
 	ctl.space_info = space_info;
 	init_alloc_chunk_ctl(fs_devices, &ctl);
 
-	devices_info = kcalloc(fs_devices->rw_devices, sizeof(*devices_info),
-			       GFP_NOFS);
-	if (!devices_info)
-		return ERR_PTR(-ENOMEM);
-
-	ret = gather_device_info(fs_devices, &ctl, devices_info);
+	ret = gather_device_info(fs_devices, &ctl, &devices_info);
 	if (ret < 0) {
 		block_group = ERR_PTR(ret);
 		goto out;
 	}
 
-	ret = decide_stripe_size(fs_devices, &ctl, devices_info);
+	ret = decide_stripe_size(fs_devices, &ctl, &devices_info);
 	if (ret < 0) {
 		block_group = ERR_PTR(ret);
 		goto out;
 	}
 
-	block_group = create_chunk(trans, &ctl, devices_info);
+	block_group = create_chunk(trans, &ctl, &devices_info);
 
 out:
-	kfree(devices_info);
+	while (!list_empty(&devices_info)) {
+		struct btrfs_device_info *device_info;
+
+		device_info = list_first_entry(&devices_info,
+					       struct btrfs_device_info, list);
+		list_del(&device_info->list);
+		kfree(device_info);
+	}
 	return block_group;
 }
 

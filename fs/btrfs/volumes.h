@@ -604,6 +604,7 @@ struct btrfs_io_context {
 };
 
 struct btrfs_device_info {
+	struct list_head list;
 	struct btrfs_device *dev;
 	u64 dev_offset;
 	u64 max_avail;
