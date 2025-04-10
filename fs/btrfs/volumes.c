@@ -1123,6 +1123,7 @@ static void __btrfs_free_extra_devids(struct btrfs_fs_devices *fs_devices,
 				      struct btrfs_device **latest_dev)
 {
 	struct btrfs_device *device, *next;
+	bool oldest = (fs_devices->read_devid < 0);
 
 	/* This is the initialized path, it is safe to release the devices. */
 	list_for_each_entry_safe(device, next, &fs_devices->devices, dev_list) {
@@ -1130,10 +1131,17 @@ static void __btrfs_free_extra_devids(struct btrfs_fs_devices *fs_devices,
 			if (!test_bit(BTRFS_DEV_STATE_REPLACE_TGT,
 				      &device->dev_state) &&
 			    !test_bit(BTRFS_DEV_STATE_MISSING,
-				      &device->dev_state) &&
-			    (!*latest_dev ||
-			     device->generation > (*latest_dev)->generation)) {
-				*latest_dev = device;
+				      &device->dev_state)) {
+				if (!*latest_dev)
+					*latest_dev = device;
+
+				if (oldest) {
+					if (device->generation < (*latest_dev)->generation)
+						*latest_dev = device;
+				} else {
+					if (device->generation > (*latest_dev)->generation)
+						*latest_dev = device;
+				}
 			}
 			continue;
 		}
@@ -1311,9 +1319,18 @@ static int open_fs_devices(struct btrfs_fs_devices *fs_devices,
 		int ret2;
 
 		ret2 = btrfs_open_one_device(fs_devices, device, flags, holder);
-		if (ret2 == 0 &&
-		    (!latest_dev || device->generation > latest_dev->generation)) {
-			latest_dev = device;
+		if (ret2 == 0) {
+			if (!latest_dev) {
+				latest_dev = device;
+			} else {
+				if (fs_devices->read_devid < 0) {
+					if (device->generation < latest_dev->generation)
+						latest_dev = device;
+				} else {
+					if (device->generation > latest_dev->generation)
+						latest_dev = device;
+				}
+			}
 		} else if (ret2 == -ENODATA) {
 			fs_devices->num_devices--;
 			list_del(&device->dev_list);
