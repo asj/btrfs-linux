@@ -5976,11 +5976,29 @@ unsigned long btrfs_full_stripe_len(struct btrfs_fs_info *fs_info,
 #ifdef CONFIG_BTRFS_EXPERIMENTAL
 static int btrfs_read_preferred(struct btrfs_chunk_map *map, int first, int num_stripes)
 {
-	for (int index = first; index < first + num_stripes; index++) {
-		const struct btrfs_device *device = map->stripes[index].dev;
+	int preferred_devid = READ_ONCE(map->stripes[first].dev->fs_devices->read_devid);
+	int index_lowest_gen = first;
 
-		if (device->devid == READ_ONCE(device->fs_devices->read_devid))
-			return index;
+	if (preferred_devid < 0) {
+		u64 generation = map->stripes[first].dev->generation;
+
+		for (int index = first; index < first + num_stripes; index++) {
+			const struct btrfs_device *device = map->stripes[index].dev;
+
+			if (device->generation < generation) {
+				generation = device->generation;
+				index_lowest_gen = index;
+			}
+		}
+
+		return index_lowest_gen;
+	} else {
+		for (int index = first; index < first + num_stripes; index++) {
+			const struct btrfs_device *device = map->stripes[index].dev;
+
+			if (device->devid == preferred_devid)
+				return index;
+		}
 	}
 
 	/* If no read-preferred device is set use the first stripe. */
