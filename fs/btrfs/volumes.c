@@ -5277,6 +5277,10 @@ static int gather_device_info(struct btrfs_fs_devices *fs_devices,
 	}
 	ctl->ndevs = ndevs;
 
+	/* No sorting is required if there is only one device */
+	if (ctl->ndevs == 1)
+		return 0;
+
 	/*
 	 * Now sort the devices by hole size / available space.
 	 */
