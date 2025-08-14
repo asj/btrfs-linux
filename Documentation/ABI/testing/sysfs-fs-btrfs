@@ -1,0 +1,382 @@
+What:           /sys/fs/btrfs/features/acl
+Date:           July 2023
+KernelVersion:  6.6
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Indicates whether the running kernel's btrfs supports POSIX ACL.
+		ACL support is controlled by the compile-time option
+		CONFIG_BTRFS_FS_POSIX_ACL.
+
+		Reading this file returns:
+		   0 - ACL support not available
+		   1 - ACL support available
+
+		If the file does not exist, the kernel is too old to expose
+		this interface. In that case, ACL support can only be
+		determined by mounting and checking mount options.
+Users:		btrfs-progs, fstests, system administration scripts
+
+What:           /sys/fs/btrfs/features/block_group_tree
+		/sys/fs/btrfs/<FSID>/features/block_group_tree
+Date:           August 2022
+KernelVersion:  6.1
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+                Read-only compatible feature flag indicating that the
+                filesystem stores block group items in a dedicated
+                BLOCK_GROUP_TREE (BGT), instead of in the EXTENT_TREE.
+
+                This improves mount performance by avoiding a full block
+                group item search during mount.
+
+                Enabling this feature requires that the filesystem also has
+                the free space cache v2 and no-holes features enabled. This
+                restriction is intended to reduce testing combinations and
+                encourage use of current default features.
+
+		File exists:
+		   Support is available in the kernel
+		Reading this file returns:
+		   0 - Undefined
+		   1 - Filesystem is using the BGT
+Users:          System administration scripts.
+
+What:           /sys/fs/btrfs/features/compress_zstd
+		/sys/fs/btrfs/<FSID>/features/compress_zstd
+Date:           August 2017
+KernelVersion:  4.14
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+                Indicates whether the kernel's btrfs supports Zstandard (zstd)
+                compression.
+
+		File exists:
+		  Zstd compression is supported.
+                Reading this file returns:
+                  0 - Undefined
+                  1 - Filesystem first mount is using the Zstd compression.
+Users:		System administration scripts
+
+What:           /sys/fs/btrfs/features/extent_tree_v2
+		/sys/fs/btrfs/<FSID>/features/extent_tree_v2
+Date:           2021
+KernelVersion:  5.17
+CommitID:
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Indicates support for extent-tree-v2, a newer on-disk format
+		using per-block-group trees and global roots to improve
+		parallelism and mount performance.
+
+		Global features file exists indicates:
+		  Extent tree v2 is supported by the kernel.
+                Per FSID reading this file returns:
+                  0 - Undefined
+                  1 - Filesystem is using the extent tree v2.
+Users:          mkfs.btrfs, system administration scripts.
+
+#Debug
+What:           /sys/fs/btrfs/features/zoned
+		/sys/fs/btrfs/<FSID>/features/zoned
+Date:           2020
+KernelVersion:  5.10
+CommitID:	7b3d5a90cbb9bc6a48c82fd7c146d24d6fceb0fa
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Indicates that the kernel supports zoned block device mode (ZNS,
+		host-managed zoned storage), enabling zoned-aware allocation
+		and mode.
+
+		Global features file exists indicates:
+		  Zoned feature supported by the kernel.
+		Per FSID reading this file returns:
+		  0 - Undefined
+		  1 - Filesystem is on a zoned device.
+Users:          System tools for zoned disk management.
+
+What:           /sys/fs/btrfs/features/raid_stripe_tree
+		/sys/fs/btrfs/<FSID>/features/raid_stripe_tree
+Date:           Sep 2023
+KernelVersion:  6.6
+CommitID:	9f9918a8017b7925da2fad16b4ccf6a14630f03e
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Indicates support for the new RAID stripe tree, used for
+		logical-to-physical extent mapping in striped or zoned
+		RAID profiles.
+
+		Global features file exists indicates:
+		  RAID stripe tree feature supported by the kernel.
+		Per FSID reading this file returns:
+		  0 - Undefined
+		  1 - Filesystem is using RAID stripe tree.
+Users:          System admin scripts.
+
+What:           /sys/fs/btrfs/features/simple_quota
+		/sys/fs/btrfs/<FSID>/features/simple_quota
+Date:           July 2023
+KernelVersion:  6.7
+CommitID:	a744986ac4dbe42496410780800fbbc00afaa910
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Simple quota mode (squota) support—qgroup accounting simplified
+		to initial extent owners, making snapshot deletion cheaper (static).
+
+		Global features file exists indicates:
+		  Squota feature is supported by the kernel.
+		Per FSID reading this file returns:
+		  0 - Undefined
+		  1 - Filesystem is using Squota.
+Users:          btrfs-progs, System admin scripts.
+
+What:		/sys/fs/btrfs/features/temp_fsid
+		/sys/fs/btrfs/<FSID>/temp_fsid
+Date:           2024
+KernelVersion:  6.7
+CommitID:	f3623740068e548b7c6fdb42171c118189d0e03f
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Support for temporary per-mount FSID, allowing re-cloned
+		filesystems (e.g., for root A/B systems) to get a fresh FSID.
+
+		Global features file exists, indicating:
+		  The temp_fsid feature is supported by the kernel.
+		Per FSID reading this file returns:
+		  0 - FSID is the actual fsid, not the temp_fsid.
+		  1 - Filesystem is using a dynamically assigned temp fsid.
+Users:		System admin scripts.
+
+What:		/sys/fs/btrfs/features/free_space_tree
+		/sys/fs/btrfs/<FSID>/features/free_space_tree
+Date:           2016
+KernelVersion:	4.4
+CommitID:	3b5bb73bd88d1d90163c91e7cad50b12725dbb1c
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		This feature stores free space information in a dedicated tree
+		on disk, improving mount performance and allocation speed for
+		large filesystems.
+
+		Global features file exists, indicating:
+		  Kernel supports the Free Space Tree feature.
+		Per FSID reading this file returns:
+		  0  The filesystem is not using the Free Space Tree.
+		  1  The filesystem is using the Free Space Tree.
+Users:		System admin scripts.
+
+What:		/sys/fs/btrfs/features/no_holes
+		/sys/fs/btrfs/<FSID>/features/no_holes
+Date:		2010
+KernelVersion:	3.13
+CommitID:	c736c095de53c1a0a23909239d69bb56693df8ef
+Contact:	linux-btrfs@vger.kernel.org
+Description:
+		Indicates support for hole punching free space tracking
+		(no_holes), enabling per-block-group extent accounting
+		without holes.
+
+		Global features file exists, indicating:
+		  Kernel supports the no_holes features.
+		Per FSID reading this file returns:
+		  0  Undefined
+		  1  The filesystem is using the no holes feature.
+Users:          Admin scripts.
+
+What:		/sys/fs/btrfs/features/raid1c34
+		/sys/fs/btrfs/<FSID>/features/raid1c34
+Date:		July 2018
+KernelVersion:  5.4
+CommitID:	cfbb825c76198c9095428c5f9362fbf6ae06f417
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Indicates support for RAID-1 3- and 4-copy variants (c3/c4),
+		allowing triple or quadruple mirroring.
+
+		Global features file exists, indicating:
+		  Kernel supports the raid1c34 feature.
+		Per FSID reading this file returns:
+		  0  Undefined
+		  1  The filesystem is using the raid1c34 raid policy.
+Users:		Admin scripts.
+
+What:		/sys/fs/btrfs/features/send_stream_version
+Date:		2020
+KernelVersion:	5.9
+CommitID:	7573df5547c00f067e4c0b2fd7cc99f3d3a2bda7
+Contact:	linux-btrfs@vger.kernel.org
+Description:
+		Indicates which Btrfs send-stream version is supported by the
+		kernel.
+
+		Reading this file indicates:
+		  <n> Send stream version.
+Users:		btrfs send/receive tooling, backup and replication scripts.
+
+What:		/sys/fs/btrfs/features/verity
+Date:		Jun 2021
+KernelVersion:  5.14
+CommitID:	146054090b0859b28fc39015c7704ccc3c3a347f
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Integrity-verified detect mode (fsverity) support for readonly.
+
+		Global features file exists, indicates:
+		  Kernel supports the verity feature.
+		Reading this file indicates:
+		  0 - Undefined.
+Users:		Filesystem integrity tools, container images.
+
+What:           /sys/fs/btrfs/features/metadata_uuid
+		/sys/fs/btrfs/<FSID>/features/metadata_uuid
+Date:           November 2024
+KernelVersion:  5.0
+CommitID:	56f20f4009d3c0b2e6165d9136fed40028c8225d
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Shows the metadata UUID of the mounted Btrfs filesystem.
+
+		Global features file exists, indicates:
+		  Kernel supports the metadata_uuid feature.
+		Reading this file indicates:
+		  Current metadata UUID.
+Users:		Admin scripts.
+
+What:		/sys/fs/btrfs/features/supported_checksums
+Date:		October 2019
+KernelVersion:	5.5
+CommitID:	f7cea56c0fff95bd5a6cd21b9fa299f66193b604
+Contact:	linux-btrfs@vger.kernel.org
+Description:
+		Lists checksum algorithms supported by the kernel for Btrfs
+		(e.g., crc32c, xxhash, sha256). Read-only static list.
+Users:		btrfs-progs, admin scripts.
+
+What:           /sys/fs/btrfs/features/supported_sectorsizes
+Date:		March 2021
+KernelVersion:	5.13
+CommitID:	fc57ad8d338cbe78c3f7565f3c0812938835fad8
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Lists supported inode block sector sizes (e.g., 4K, 16K, 64K)
+		informs mkfs about acceptable sizes.
+Users:		btrfs-progs, admin scripts.
+
+What:		/sys/fs/btrfs/features/supported_rescue_options
+Date:		October 2020
+KernelVersion:	5.11
+CommitID:	ceafe3cc39923fc80b9091f3fd993e6de1b6a399
+Contact:	linux-btrfs@vger.kernel.org
+Description:
+		Lists the rescue mount options supported by the kernel.
+Users:		admin tools.
+
+What:           /sys/fs/btrfs/features/mixed_groups
+Date:		Nov 2013
+KernelVersion:	3.13
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Mixed data+metadata block groups support, useful for space
+		constrained devices.
+Users:          mkfs.btrfs, admin tools.
+
+What:		/sys/fs/btrfs/features/mixed_backref
+Date:		Nov 2013
+KernelVersion:	3.13 (published)
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee (added)
+KernelVersion:	6.0 (removed)
+CommitID:	0766837b0d8d29928ec0369621f560353217e3da (removed)
+Contact:	linux-btrfs@vger.kernel.org
+Description:
+		Indicates that extent backreferences may mix inode references
+                and shared references in the same backref item.
+Users:          System administration scripts
+
+What:           /sys/fs/btrfs/features/compress_lzo
+Date:		Nov 2013 (Published)
+KernelVersion:	3.14 (Published)
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee (Published)
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Indicates whether the kernel's btrfs supports LZO compression.
+		Presence of this file indicate "LZO compression" is supported,
+		reading the file returns 0 always.
+Users:		system administration scripts
+
+What:           /sys/fs/btrfs/features/compress_lzov2
+Date:		Jan 2014 (Removed)
+KernelVersion:	3.14 (Removed)
+CommitID:	66b4bbd4f5895e4b9da03885c00e42ba64f7038e (Removed)
+Date:		Nov 2013 (Published)
+KernelVersion:	3.14 (Published)
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee (Published)
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Indicates whether the kernel's btrfs supports LZOv2 compression.
+		Presence of this file indicate "LZOv2 compression" is supported,
+		reading the file returns 0 always.
+Users:		system administration scripts
+
+What:           /sys/fs/btrfs/features/default_subvol
+Date:		Nov 2013
+KernelVersion:	3.13
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee
+Contact:	linux-btrfs@vger.kernel.org
+Description:
+		This feature allows a btrfs filesystem to mark a specific
+		subvolume as the default, so that mounting the filesystem
+		without a subvolume= option automatically mounts that subvolume.
+
+		Presence of this file indicate "default subvolume" is supported,
+		reading the file returns 0 always.
+Users:          System administration scripts
+
+What:		/sys/fs/btrfs/features/big_metadata
+Date:		Jan 2022 (Removed)
+KernelVersion:	6.0 (Removed)
+CommitID:	74860816e804ca175fa790f9bf5a369ab29d93ce (Removed)
+Date:		Nov 2013 (Published)
+KernelVersion:	3.13 (Published)
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee (Published)
+Contact:	linux-btrfs@vger.kernel.org
+Description:
+		Metadata blocks (internal tree nodes and leaves) use the same
+		size as data blocks instead of the default 4 KiB. This reduces
+		tree depth, improves scalability for large filesystems, and
+		decreases metadata fragmentation. Not mountable by kernels
+		without big_metadata support.
+Users:		System administration scripts
+
+What:           /sys/fs/btrfs/features/extended_iref
+		/sys/fs/btrfs/<FSID>/features/extended_iref
+Date:		Nov 2013 (Published)
+KernelVersion:	3.13 (Published)
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee (Published)
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Reading global features file indicates:
+		  1 indicate feature can be disabled/enabled per Btrfs filesystem.
+		Reading per FSID file indicates:
+		  0 extended_iref is disabled.
+		  1 extended_iref is enabled.
+Users:		System administration scripts
+
+What:           /sys/fs/btrfs/features/raid56
+Date:		Nov 2013 (Published)
+KernelVersion:	3.13 (Published)
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee (Published)
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Presence of the global features file indicates, kernel supports
+		RAID-5/6 profiles block group profile.
+Users:		btrfs-progs, System administration scripts.
+
+What:           /sys/fs/btrfs/features/skinny_metadata
+Date:		Nov 2013 (Published)
+KernelVersion:	3.13 (Published)
+CommitID:	079b72bca30dbc74c86c7c7825b8c34eb86ce3ee (Published)
+Contact:        linux-btrfs@vger.kernel.org
+Description:
+		Presence of the global features file indicates, kernel supports
+		skinny_metadata feature.
+Users:		System administration scripts.
